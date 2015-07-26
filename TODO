@@ -1,0 +1,7 @@
+TODO:
+	* add getdents for search victims
+		* bonus for root user: directly go to /usr/bin /bin 
+		* normal user: search in /home/user_name/bin/
+	* code is too big so some cuts would be nice (many binaries doesn't have gap
+	  between sections big enought)
+	* add mechanism to distinguish infected files
