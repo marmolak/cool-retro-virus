@@ -122,7 +122,6 @@ static inline void memcpy(long src_addr, long dst_addr, long size)
 void _start(void) __attribute__((aligned(16), section(".text")));
 void _start(void)
 {
-label1: ;
 	char a[5];
 	volatile Elf64_Ehdr ehdr;
 	volatile Elf64_Phdr phdr;
