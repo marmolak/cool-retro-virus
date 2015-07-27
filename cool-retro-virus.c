@@ -109,8 +109,8 @@ static inline long syscall3(int num, long a1, long a2, long a3)
 	return ret;
 }
 
-static inline void memcpy(long src_addr, long dst_addr, long size) __attribute__((always_inline));
-static inline void memcpy(long src_addr, long dst_addr, long size)
+static inline void _memcpy(long src_addr, long dst_addr, long size) __attribute__((always_inline));
+static inline void _memcpy(long src_addr, long dst_addr, long size)
 {
 	long x;
 	for(x = 0; x < size; x += 8, src_addr += 8, dst_addr += 8)
@@ -193,7 +193,7 @@ void _start(void)
 			 * so I use this space to add jump...
 			 * as a side effect it generates jump inside
 			 * instruction so it mess gdb :) */
-			memcpy((long)&(ehdr.e_entry), (long)&(jmp[2]), 8); 
+			_memcpy((long)&(ehdr.e_entry), (long)&(jmp[2]), 8); 
 			write(fd, jmp, sizeof(jmp));
 
 			/* change elf header entry point */
