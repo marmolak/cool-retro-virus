@@ -120,7 +120,6 @@ static inline void _memcpy(long src_addr, long dst_addr, long size)
 	}
 }
 
-void _start(void) __attribute__((aligned(16), section(".text")));
 void _start(void)
 {
 	/* handle stack manually.... yes this is fight agains compiler :( */
@@ -170,7 +169,6 @@ void _start(void)
 	jmp[12] = '\x5b';
 	jmp[13] = '\x58';
 
-
 	jmp[14] = '\x49';
 	jmp[15] = '\xbc';
 	jmp[16] = '\x77';
@@ -206,6 +204,8 @@ void _start(void)
 	for (p = 0; p < (ehdr.e_phnum - 1); ++p) {
 		read(fd, &phdr, sizeof(phdr));
 		if (phdr.p_type != PT_LOAD) { continue; }
+
+		/* we have match! */
 		read(fd, &phdr_next, sizeof(phdr_next));
 
 		if ((phdr_next.p_offset - (phdr.p_offset + phdr.p_filesz) + sizeof(jmp)) < real_code_size) { continue; }
