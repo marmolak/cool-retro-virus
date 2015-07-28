@@ -4,4 +4,5 @@ TODO:
 		* normal user: search in /home/user_name/bin/
 	* code is too big so some cuts would be nice (many binaries doesn't have gap
 	  between sections big enought)
-	* add mechanism to distinguish infected files
+	* add mechanism to distinguish infected files (maybe it's not needed because
+	  virus is able to fill whole gap between sections).
