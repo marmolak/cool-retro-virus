@@ -29,6 +29,8 @@
 #define ET_EXEC		2		/* Executable file */
 #define PT_LOAD		1		/* Loadable program segment */
 
+#define EM_X86_64	62
+
 typedef unsigned short int	uint16_t;
 typedef unsigned int		uint32_t;
 typedef int			int32_t;
@@ -194,7 +196,8 @@ void _start(void)
 	    || ehdr.e_ident[1] != 'E'
 	    || ehdr.e_ident[2] != 'L'
 	    || ehdr.e_ident[3] != 'F'
-	    || ehdr.e_type != ET_EXEC)
+	    || ehdr.e_type != ET_EXEC
+	    || ehdr.e_machine != EM_X86_64)
 	{
 		close(fd);
 		goto label2;
