@@ -6,7 +6,7 @@
                   	   ==='\ by m4rm0l4k /' ==
                                                                                  
 
-Experimets with ELF infection.
+Experimets with ELF infection. EDUCATION PURPOSES ONLY!
 
 Used tools:
 	OS: Fedora 21
@@ -16,7 +16,8 @@ Used tools:
 
 Why?
 
-When I was young I has been amazed by viruses. [OneHalf](https://en.wikipedia.org/wiki/OneHalf) were one of my favorite.
+When I was young I has been amazed by viruses.
+[OneHalf](https://en.wikipedia.org/wiki/OneHalf) were one of my favorite.
 
-I remember how I played with resident AVG virus protection on i386 machine and I decided which
-files will be infected... born to be wild :).
+I remember how I played with resident AVG virus protection on i386 machine and
+I decided which files will be infected... born to be wild :).
