@@ -14,7 +14,7 @@ Used tools:
 	Debugger: gdb-7.8.2-39
 	Others: binutils-2.24-32
 
-NOTE: I tested this virus on Fedora 20 with gcc 4.8.3 and it generates code which touch
+NOTE: I tested this virus on Fedora 20 with gcc 4.8.3 and gcc generates code which touch
 sections behind .text.
 Also it looks that it doesn't work on Fedora 20 binaries either (tested on ls).
 Infected binaries looks crippled in gdb and segfaults after start.
