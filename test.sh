@@ -1,6 +1,12 @@
 make
-cp -f /usr/bin/ls ./aaaa
-./cool-retro-virus
-mv -f ./aaaa ./a2
-cp -f /usr/bin/ls ./aaaa
-./a2
+BINARIES=(ls unxz gcc)
+for file in ${BINARIES[*]}; do
+	cp -f /usr/bin/${file} /usr/local/bin/
+done
+
+strace ./cool-retro-virus 2> TESTOUT
+strace /usr/local/bin/ls 2> LSOUT
+
+for file in ${BINARIES[*]}; do
+	rm -f /usr/local/bin/${file} 
+done
